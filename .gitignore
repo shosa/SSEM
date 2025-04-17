@@ -1,0 +1,59 @@
+# Directory di output e build
+/dist/
+/build/
+/output/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# File di log
+*.log
+logs/
+
+# File di configurazione con credenziali
+# config/*.ini 
+# Nota: puoi decommentare questa riga se non vuoi tracciare i file di configurazione con credenziali
+
+# File di ambiente
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Cartelle dell'editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# File specifici per Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# File generati da PyInstaller
+*.manifest
+*.spec
+
+# File locali che potrebbero contenere dati sensibili
+captcha_huawei.onnx
+
+# File temporanei
+temp/
+tmp/
+
+# Database SQLite
+*.sqlite
+*.db
+
+# Altri file generati automaticamente
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/

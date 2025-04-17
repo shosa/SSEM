@@ -1,6 +1,7 @@
 #define MyAppName "SSEM"
-#define MyAppVersion GetFileVersion("dist\SSEM\SSEM.exe")
+#define MyAppVersion "2.1.6"
 #define MyAppPublisher "Stefano Solidoro"
+#define MyAppURL "mailto:stefano.solidoro@icloud.com"
 #define MyAppExeName "SSEM.exe"
 
 [Setup]
@@ -13,12 +14,16 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
-LicenseFile=LICENSE.txt
 OutputDir=output
-OutputBaseFilename=SSEM-Setup-{#MyAppVersion}
+OutputBaseFilename=SSEM-Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+
+
+[Dirs]
+Name: "{app}\logs"; Permissions: users-modify
+Name: "{app}\config"; Permissions: users-modify
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
