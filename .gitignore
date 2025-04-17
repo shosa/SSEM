@@ -41,7 +41,6 @@ $RECYCLE.BIN/
 *.spec
 
 # File locali che potrebbero contenere dati sensibili
-captcha_huawei.onnx
 
 # File temporanei
 temp/
