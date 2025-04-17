@@ -1,0 +1,5 @@
+flask==2.3.3
+requests==2.31.0
+fusion-solar-py>=0.1.0
+pyinstaller==6.1.0
+inno-setup-compiler==0.4

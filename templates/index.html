@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SolarMonitor - Monitoraggio Impianti Fotovoltaici</title>
+    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/icons.css') }}">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .plant-card {
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .plant-online {
+            border-left: 5px solid #28a745;
+        }
+        .plant-offline {
+            border-left: 5px solid #dc3545;
+        }
+        .plant-warning {
+            border-left: 5px solid #ffc107;
+        }
+        .status-badge-online {
+            background-color: #28a745;
+        }
+        .status-badge-offline {
+            background-color: #dc3545;
+        }
+        .status-badge-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .power-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .update-time {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        /* Animazione lampeggiante per impianti offline o warning */
+        @keyframes blink-card {
+            0% { opacity: 1; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+            50% { opacity: 0.8; box-shadow: 0 4px 20px rgba(220,53,69,0.4); }
+            100% { opacity: 1; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        }
+        .blinking-card {
+            animation: blink-card 1s linear infinite;
+        }
+        
+        .refreshing {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Header */
+        .header-container {
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px 0;
+            margin-bottom: 30px;
+        }
+        
+        /* Contatori stato */
+        .status-counter {
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .counter-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        .overview-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <div class="container">
+            <header class="d-flex flex-wrap justify-content-between align-items-center">
+                <h1 class="d-flex align-items-center mb-0 me-md-auto">
+                    <i class="bi bi-sun text-warning me-2"></i> SolarMonitor
+                </h1>
+                <div class="btn-group">
+                    <button id="refreshBtn" class="btn btn-primary">
+                        <i class="bi bi-arrow-clockwise"></i> Aggiorna
+                    </button>
+                    <button id="monitoringBtn" class="btn btn-success">
+                        <i class="bi bi-play-circle"></i> Monitoraggio attivo
+                    </button>
+                </div>
+            </header>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="overview-card p-4">
+                    <h5 class="mb-3">
+                        <i class="bi bi-lightning-charge text-primary"></i> Potenza Totale
+                    </h5>
+                    <p class="power-value mb-0" id="totalPower">0.00 kW</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="overview-card p-4">
+                    <h5 class="mb-3">
+                        <i class="bi bi-list-check"></i> Stato Impianti
+                    </h5>
+                    <div class="row">
+                        <div class="col-4">
+                            <div class="status-counter bg-success bg-opacity-10">
+                                <div class="counter-value text-success" id="onlineCount">0</div>
+                                <p class="mb-0">Online</p>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="status-counter bg-warning bg-opacity-10">
+                                <div class="counter-value text-warning" id="warningCount">0</div>
+                                <p class="mb-0">Attenzione</p>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="status-counter bg-danger bg-opacity-10">
+                                <div class="counter-value text-danger" id="offlineCount">0</div>
+                                <p class="mb-0">Offline</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="mb-3">
+            <i class="bi bi-collection"></i> Impianti
+        </h2>
+        <div class="row" id="plantsContainer">
+            <!-- Le card degli impianti saranno inserite qui dinamicamente -->
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <i class="bi bi-hourglass-split"></i> Caricamento impianti in corso...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inclusione di Bootstrap JS per il modale -->
+    <script src="{{ url_for('static', filename='js/bootstrap.js') }}"></script>
+    
+    <!-- Script JavaScript per il monitoraggio -->
+    <script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
+</body>
+</html>
