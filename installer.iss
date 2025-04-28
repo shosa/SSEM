@@ -1,5 +1,5 @@
 #define MyAppName "SSEM"
-#define MyAppVersion "2.1.6"
+#define MyAppVersion "2.2.0c"
 #define MyAppPublisher "Stefano Solidoro"
 #define MyAppURL "mailto:stefano.solidoro@icloud.com"
 #define MyAppExeName "SSEM.exe"

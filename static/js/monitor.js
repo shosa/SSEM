@@ -143,6 +143,77 @@ function simplifyErrorMessage(errorMessage) {
 }
 
 /**
+ * Crea una card per un impianto usando il template
+ * @param {Object} plant - Dati dell'impianto
+ * @returns {HTMLElement} - Elemento DOM della card
+ */
+function createPlantCard(plant) {
+    const template = document.getElementById('plantCardTemplate');
+    const clone = document.importNode(template.content, true);
+    
+    const card = clone.querySelector('.plant-card');
+    const nameEl = clone.querySelector('.plant-name');
+    const statusEl = clone.querySelector('.plant-status');
+    const statusIndicator = clone.querySelector('.status-indicator');
+    const powerEl = clone.querySelector('.power-value');
+    const updateTimeEl = clone.querySelector('.update-time');
+    
+    // Aggiungi message-container se non esiste nel template
+    let messageContainer = clone.querySelector('.message-container');
+    if (!messageContainer) {
+        messageContainer = document.createElement('div');
+        messageContainer.className = 'message-container mt-3';
+        const cardBody = clone.querySelector('.card-body');
+        if (cardBody) {
+            cardBody.appendChild(messageContainer);
+        }
+    }
+    
+    nameEl.textContent = plant.name;
+    powerEl.textContent = plant.power + ' kW';
+    updateTimeEl.textContent = 'Aggiornato: ' + plant.last_update;
+    
+    // Determina se l'impianto ha potenza zero mentre è online
+    const isZeroPower = plant.is_online && plant.power <= 0;
+    
+    // Imposta lo stato e il semaforo in base allo stato dell'impianto
+    if (plant.is_online) {
+        if (plant.power > 0) {
+            statusEl.textContent = 'ONLINE';
+            statusEl.classList.add('text-success');
+            statusIndicator.classList.add('status-online');
+            card.classList.add('plant-online');
+        } else {
+            statusEl.textContent = 'ATTENZIONE';
+            statusEl.classList.add('text-warning');
+            statusIndicator.classList.add('status-warning');
+            card.classList.add('plant-warning', 'blinking-card');
+            
+            // Aggiunge messaggio warning per potenza zero
+            const warningMsg = document.createElement('div');
+            warningMsg.className = 'warning-message';
+            warningMsg.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Impianto attivo ma produzione a zero';
+            messageContainer.appendChild(warningMsg);
+        }
+    } else {
+        statusEl.textContent = 'OFFLINE';
+        statusEl.classList.add('text-danger');
+        statusIndicator.classList.add('status-offline');
+        card.classList.add('plant-offline', 'blinking-card');
+        
+        // Aggiunge messaggio di errore se presente
+        if (plant.error_message) {
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'error-message';
+            errorMsg.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${simplifyErrorMessage(plant.error_message)}`;
+            messageContainer.appendChild(errorMsg);
+        }
+    }
+    
+    return clone;
+}
+
+/**
  * Aggiorna le informazioni degli impianti
  */
 function updatePlants() {
@@ -156,7 +227,6 @@ function updatePlants() {
             const plantsContainer = document.getElementById('plantsContainer');
             plantsContainer.innerHTML = '';
             
-            let totalPower = 0;
             let onlineCount = 0;
             let warningCount = 0;
             let offlineCount = 0;
@@ -165,20 +235,10 @@ function updatePlants() {
             
             // Mostra tutti gli impianti
             Object.entries(plants).forEach(([plantId, plant]) => {
-                // Definisce classi e conteggi in base allo stato
-                const isZeroPower = plant.is_online && plant.power <= 0;
-                const statusClass = plant.is_online ? (plant.power > 0 ? 'plant-online' : 'plant-warning') : 'plant-offline';
-                const statusBadge = plant.is_online ? (plant.power > 0 ? 'status-badge-online' : 'status-badge-warning') : 'status-badge-offline';
-                const statusLabel = plant.is_online ? (plant.power > 0 ? 'ONLINE' : 'ATTENZIONE') : 'OFFLINE';
-                
-                // Determina se la card deve lampeggiare
-                const blinkingClass = (plant.is_online && plant.power > 0) ? '' : 'blinking-card';
-                
-                // Aggiorna i contatori
+                // Determina lo stato dell'impianto
                 if (plant.is_online) {
                     if (plant.power > 0) {
                         onlineCount++;
-                        totalPower += plant.power;
                     } else {
                         warningCount++;
                         if (config.alarmOnZeroPower) {
@@ -190,53 +250,16 @@ function updatePlants() {
                     newHasOfflineImpianti = true;
                 }
                 
-                // Semplifica il messaggio di errore
-                const simplifiedError = simplifyErrorMessage(plant.error_message);
-                
-                // Aggiunge messaggio di attenzione per potenza zero
-                const zeroPowerWarning = isZeroPower ? 
-                    '<div class="alert alert-warning mt-3 mb-0 py-2 small">ATTENZIONE: Impianto attivo ma produzione a zero</div>' : '';
-                
-                // Crea la card dell'impianto
-                const plantCard = document.createElement('div');
-                plantCard.className = 'col-md-4 mb-4';
-                plantCard.innerHTML = `
-                    <div class="card plant-card ${statusClass} ${blinkingClass}">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="card-title mb-0">${plant.name}</h5>
-                            <span class="badge ${statusBadge}">${statusLabel}</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="row mb-3">
-                                <div class="col-12 text-center">
-                                    <div class="text-muted">Potenza attuale:</div>
-                                    <div class="display-4">${plant.power} kW</div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-6">
-                                    <div class="text-muted">Tipo: ${plant.type}</div>
-                                    <div class="text-muted">ID: ${plant.id}</div>
-                                </div>
-                                <div class="col-6 text-end">
-                                    <div class="update-time">Ultimo aggiornamento:</div>
-                                    <div class="update-time">${plant.last_update}</div>
-                                </div>
-                            </div>
-                            ${zeroPowerWarning}
-                            ${simplifiedError ? `
-                                <div class="alert alert-danger mt-3 mb-0 py-2 small">
-                                    ${simplifiedError}
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-                plantsContainer.appendChild(plantCard);
+                // Crea e aggiungi la card usando il template
+                try {
+                    const plantCard = createPlantCard(plant);
+                    plantsContainer.appendChild(plantCard);
+                } catch (error) {
+                    console.error('Errore nella creazione della card per l\'impianto:', plant.name, error);
+                }
             });
             
             // Aggiorna i contatori
-            document.getElementById('totalPower').textContent = totalPower.toFixed(2) + ' kW';
             document.getElementById('onlineCount').textContent = onlineCount;
             document.getElementById('warningCount').textContent = warningCount;
             document.getElementById('offlineCount').textContent = offlineCount;
