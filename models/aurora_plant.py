@@ -1,6 +1,3 @@
-"""
-Implementazione della classe Plant per gli impianti AuroraVision.
-"""
 import logging
 from datetime import datetime
 from models.plant import Plant
@@ -58,13 +55,25 @@ class AuroraVisionPlant(Plant):
                     current_power = 0.0
                     energy_today = 0.0
                     
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    
                     # Estrai la potenza attuale
                     for field in data.get("fields", []):
-                        if field.get("type") == "instant" and field.get("field") == "GenerationPower":
-                            current_power = float(field.get("value", 0))
-                        
+                        # Per l'energia giornaliera
                         if field.get("label") == "today" and field.get("field") == "GenerationEnergy":
                             energy_today = float(field.get("value", 0))
+                        
+                        # Per la potenza istantanea, verifica che la data sia di oggi
+                        if field.get("type") == "instant" and field.get("field") == "GenerationPower":
+                            # Estrai la data dal campo startLabel
+                            start_label = field.get("startLabel", "")
+                            if start_label and today in start_label:
+                                # La data è di oggi, possiamo usare il valore
+                                current_power = float(field.get("value", 0))
+                            else:
+                                # La data non è di oggi, imposta a zero
+                                current_power = 0.0
+                                logger.info(f"Impianto {self.name}: valore 'instant' non aggiornato a oggi. Impostato a zero.")
                     
                     # Aggiorna lo stato dell'impianto
                     return self.update_status(current_power, energy_today, True)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SolarMonitor - Monitoraggio Impianti Fotovoltaici</title>
+    <title>SSEM</title>
     <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/icons.css') }}">
     <style>
@@ -73,7 +73,7 @@
         
         /* Aggiunto - Etichetta ultimo valore */
         .last-value-label {
-            font-size: 0.5rem;
+            font-size: 0.8rem;
             color: #6c757d;
             margin-bottom: 0;
         }
@@ -237,7 +237,7 @@
                     
                     <!-- Potenza ridimensionata -->
                     <div class="mt-3">
-                        <p class="last-value-label">Ultimo valore noto (delta 30 min):</p>
+                        <p class="last-value-label">Ultimo valore noto (storicizzato a 60 min):</p>
                         <p class="power-value mb-0"></p>
                     </div>
                     
