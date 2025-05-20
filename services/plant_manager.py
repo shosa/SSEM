@@ -13,6 +13,13 @@ from services.session_managers import AuroraSessionManager, FusionSolarClientMan
 from models.aurora_plant import AuroraVisionPlant
 from models.fusion_plant import FusionSolarPlant, FUSION_SOLAR_AVAILABLE
 
+# Importa il supporto per la nuova API Northbound
+try:
+    from models.fusion_pyhfs_plant import PyHFSManager, FusionSolarNorthboundPlant, PYHFS_AVAILABLE
+except ImportError:
+    PYHFS_AVAILABLE = False
+    logging.warning("Libreria pyhfs non disponibile. Il supporto per FusionSolar Northbound API è disabilitato.")
+
 logger = logging.getLogger(__name__)
 
 class PlantManager:
@@ -32,6 +39,7 @@ class PlantManager:
         self.plants = {}
         self.aurora_session_manager = None
         self.fusion_client_manager = None
+        self.fusion_northbound_manager = None
         self.monitoring_active = False
         self.monitoring_thread = None
         self.update_interval = 300  # 5 minuti di default
@@ -102,10 +110,6 @@ class PlantManager:
         Returns:
             bool: True se il caricamento è riuscito, False altrimenti
         """
-        if not FUSION_SOLAR_AVAILABLE:
-            logger.warning("Libreria FusionSolar non disponibile, configurazione ignorata")
-            return False
-            
         config = configparser.ConfigParser()
         config_path = os.path.join(self.config_dir, config_file)
         
@@ -116,32 +120,98 @@ class PlantManager:
         try:
             config.read(config_path)
             
+            # Leggi la configurazione dalla sezione standard
+            username = config.get("CREDENTIALS", "username")
+            password = config.get("CREDENTIALS", "password")
+            subdomain = config.get("CREDENTIALS", "subdomain", fallback="")
+            captcha_model_path = config.get("CREDENTIALS", "captcha_model_path", fallback="")
+            plant_name = config.get("CREDENTIALS", "plant_name", fallback="FusionSolar")
+            time_interval = config.getint("SETTINGS", "time_interval", fallback=300)
+            
+            # Verifica se la sezione NORTHBOUND esiste e se è abilitata
+            northbound_enabled = False
+            northbound_username = username
+            northbound_password = password
+            northbound_plant_id = "main"
+            
+            if config.has_section("NORTHBOUND"):
+                # Leggi il flag enabled
+                northbound_enabled = config.getboolean("NORTHBOUND", "enabled", fallback=False)
+                
+                if northbound_enabled:
+                    northbound_username = config.get("NORTHBOUND", "username", fallback=username)
+                    northbound_password = config.get("NORTHBOUND", "password", fallback=password)
+                    northbound_plant_id = config.get("NORTHBOUND", "plant_id", fallback="main")
+            
+            # Determina quale API usare (Northbound o Standard)
+            if northbound_enabled and PYHFS_AVAILABLE:
+                api_type = "Northbound"
+                logger.info("API Northbound abilitata e disponibile per FusionSolar")
+            elif FUSION_SOLAR_AVAILABLE:
+                api_type = "Standard"
+                logger.info("API Standard disponibile per FusionSolar")
+            else:
+                logger.warning("Nessuna libreria FusionSolar disponibile, configurazione ignorata")
+                return False
+            
             self.fusion_config = {
-                "username": config.get("CREDENTIALS", "username"),
-                "password": config.get("CREDENTIALS", "password"),
-                "subdomain": config.get("CREDENTIALS", "subdomain", fallback=""),
-                "captcha_model_path": config.get("CREDENTIALS", "captcha_model_path", fallback=""),
-                "plant_name": config.get("CREDENTIALS", "plant_name", fallback="FusionSolar"),  # Aggiungi questa riga
-                "time_interval": config.getint("SETTINGS", "time_interval", fallback=300)
+                "username": username,
+                "password": password,
+                "subdomain": subdomain,
+                "captcha_model_path": captcha_model_path,
+                "plant_name": plant_name,
+                "time_interval": time_interval,
+                "api_type": api_type,
+                "northbound_enabled": northbound_enabled,
+                "northbound_username": northbound_username,
+                "northbound_password": northbound_password,
+                "northbound_plant_id": northbound_plant_id
             }
             
             # Imposta l'intervallo di aggiornamento
-            self.update_interval = min(self.update_interval, self.fusion_config["time_interval"])
+            self.update_interval = min(self.update_interval, time_interval)
             
-            # Crea il gestore di client
-            self.fusion_client_manager = FusionSolarClientManager(
-                {
-                    "username": self.fusion_config["username"],
-                    "password": self.fusion_config["password"],
-                    "subdomain": self.fusion_config["subdomain"],
-                    "captcha_model_path": self.fusion_config["captcha_model_path"]
-                }
-            )
-            
-            # Registra impianto FusionSolar
-            plant = FusionSolarPlant(self.fusion_config["plant_name"], "main", self.fusion_client_manager)
-            self.plants["fusion_main"] = plant
-            logger.info("Registrato impianto FusionSolar principale")
+            # Inizializza il gestore appropriato in base al tipo di API
+            if api_type == "Northbound":
+                logger.info("Utilizzo dell'API Northbound per FusionSolar")
+                # Crea il gestore Northbound API
+                self.fusion_northbound_manager = PyHFSManager(
+                    {
+                        "username": northbound_username,
+                        "password": northbound_password
+                    }
+                )
+                
+                # Registra impianto FusionSolar con API Northbound
+                plant = FusionSolarNorthboundPlant(plant_name, northbound_plant_id, self.fusion_northbound_manager)
+                self.plants["fusion_main"] = plant
+                logger.info(f"Registrato impianto FusionSolar principale (API Northbound): {plant_name}")
+            else:
+                logger.info("Utilizzo dell'API Standard per FusionSolar")
+                # Verifica percorso del modello CAPTCHA
+                if captcha_model_path and not os.path.isabs(captcha_model_path):
+                    # Costruisci un percorso assoluto rispetto alla directory di configurazione
+                    abs_captcha_path = os.path.abspath(os.path.join(self.config_dir, captcha_model_path))
+                    if os.path.exists(abs_captcha_path):
+                        captcha_model_path = abs_captcha_path
+                        logger.info(f"Aggiornato percorso del modello CAPTCHA a: {abs_captcha_path}")
+                    else:
+                        logger.warning(f"File del modello CAPTCHA non trovato nel percorso: {abs_captcha_path}")
+                
+                # Crea il gestore di client
+                self.fusion_client_manager = FusionSolarClientManager(
+                    {
+                        "username": username,
+                        "password": password,
+                        "subdomain": subdomain,
+                        "captcha_model_path": captcha_model_path
+                    }
+                )
+                
+                # Registra impianto FusionSolar con API Standard
+                plant = FusionSolarPlant(plant_name, "main", self.fusion_client_manager)
+                self.plants["fusion_main"] = plant
+                logger.info(f"Registrato impianto FusionSolar principale (API Standard): {plant_name}")
             
             return True
             
@@ -179,8 +249,31 @@ class PlantManager:
         """Loop di monitoraggio che aggiorna periodicamente tutti gli impianti."""
         logger.info(f"Avvio loop di monitoraggio (intervallo: {self.update_interval} secondi)")
         
+        # Contatori per il keep-alive
+        keep_alive_counter = 0
+        keep_alive_interval = 30  # Secondi (come suggerito dalla documentazione)
+        is_session_active_interval = 10  # Secondi (come suggerito dalla documentazione)
+        is_session_active_counter = 0
+        
         while self.monitoring_active:
             try:
+                # Per l'API Standard: gestione della sessione FusionSolar
+                if self.fusion_client_manager:
+                    # Verifica se la sessione è attiva (circa ogni 10 secondi)
+                    if is_session_active_counter >= is_session_active_interval:
+                        try:
+                            if self.fusion_client_manager.client and hasattr(self.fusion_client_manager.client, 'is_session_active'):
+                                self.fusion_client_manager.client.is_session_active()
+                            is_session_active_counter = 0
+                        except Exception as e:
+                            logger.debug(f"Errore nella verifica della sessione: {e}")
+                    
+                    # Mantieni attiva la sessione FusionSolar (circa ogni 30 secondi)
+                    if keep_alive_counter >= keep_alive_interval:
+                        self.fusion_client_manager.keep_session_alive()
+                        keep_alive_counter = 0
+                
+                # Aggiorna tutti gli impianti
                 self.update_all_plants()
             except Exception as e:
                 logger.error(f"Errore nel loop di monitoraggio: {e}")
@@ -190,6 +283,8 @@ class PlantManager:
                 if not self.monitoring_active:
                     break
                 time.sleep(1)
+                keep_alive_counter += 1
+                is_session_active_counter += 1
     
     def start_monitoring(self):
         """
@@ -222,6 +317,11 @@ class PlantManager:
         if self.monitoring_thread:
             self.monitoring_thread.join(timeout=10)
             self.monitoring_thread = None
+        
+        # Chiudi le sessioni
+        if self.fusion_northbound_manager:
+            self.fusion_northbound_manager.invalidate_session()
+            
         logger.info("Monitoraggio fermato")
         return True
     

@@ -4,6 +4,8 @@ Gestori di sessione per le varie API di impianti fotovoltaici.
 import logging
 import requests
 import time
+import os
+import pickle
 from datetime import datetime, timedelta
 import threading
 
@@ -126,10 +128,34 @@ class FusionSolarClientManager:
         """
         self.credentials = credentials
         self.client = None
+        self.session = requests.Session()  # Sessione persistente
         self.last_login_time = None
         self.login_valid_duration = 3600  # 1 ora in secondi
         self.lock = threading.RLock()
         self.available = FUSION_SOLAR_AVAILABLE
+        self.session_file = "fusion_session.pkl"  # File per salvare la sessione
+        
+        # Carica la sessione precedente se disponibile
+        self._load_session()
+    
+    def _load_session(self):
+        """Carica una sessione salvata in precedenza, se disponibile."""
+        try:
+            if os.path.exists(self.session_file):
+                with open(self.session_file, 'rb') as f:
+                    self.session = pickle.load(f)
+                    logger.info("Sessione FusionSolar caricata dal file")
+        except Exception as e:
+            logger.warning(f"Impossibile caricare la sessione FusionSolar: {e}")
+    
+    def _save_session(self):
+        """Salva la sessione corrente per riutilizzarla in futuro."""
+        try:
+            with open(self.session_file, 'wb') as f:
+                pickle.dump(self.session, f)
+                logger.info("Sessione FusionSolar salvata")
+        except Exception as e:
+            logger.warning(f"Impossibile salvare la sessione FusionSolar: {e}")
     
     def initialize_client(self):
         """
@@ -155,12 +181,25 @@ class FusionSolarClientManager:
                     logger.error("Credenziali FusionSolar mancanti")
                     return False
                 
-                # Crea un nuovo client
+                # Verifica esistenza del file del modello CAPTCHA
+                if captcha_model_path and not os.path.exists(captcha_model_path):
+                    logger.warning(f"File del modello CAPTCHA non trovato nel percorso relativo: {captcha_model_path}")
+                    # Prova a verificare se è un percorso relativo
+                    absolute_path = os.path.abspath(captcha_model_path)
+                    logger.info(f"Tentativo con percorso assoluto: {absolute_path}")
+                    if not os.path.exists(absolute_path):
+                        logger.error("File del modello CAPTCHA non trovato anche con percorso assoluto")
+                    else:
+                        captcha_model_path = absolute_path
+                        logger.info(f"File del modello CAPTCHA trovato al percorso assoluto: {absolute_path}")
+                
+                # Crea un nuovo client con la sessione esistente
                 client = FusionSolarClient(
                     username, 
                     password,
                     captcha_model_path=captcha_model_path,
-                    huawei_subdomain=subdomain
+                    huawei_subdomain=subdomain,
+                    session=self.session  # Passa la sessione esistente
                 )
                 
                 # Testa il client
@@ -168,6 +207,7 @@ class FusionSolarClientManager:
                 if power_status:
                     self.client = client
                     self.last_login_time = datetime.now()
+                    self._save_session()  # Salva la sessione per il futuro
                     logger.info("Inizializzazione client FusionSolar riuscita")
                     return True
                 else:
@@ -204,3 +244,49 @@ class FusionSolarClientManager:
         """Invalida il client corrente."""
         with self.lock:
             self.last_login_time = None
+    
+    def keep_session_alive(self):
+        """
+        Mantiene attiva la sessione FusionSolar chiamando i metodi appropriati.
+        
+        Returns:
+            bool: True se l'operazione ha avuto successo, False altrimenti
+        """
+        if not self.client:
+            return False
+            
+        try:
+            # Verifica se la sessione è attiva
+            try:
+                is_active = self.client.is_session_active()
+                logger.debug(f"Stato sessione FusionSolar: {'attiva' if is_active else 'non attiva'}")
+                
+                if is_active:
+                    # Invia un segnale keep-alive
+                    try:
+                        self.client.keep_alive()
+                        logger.debug("Sessione FusionSolar mantenuta attiva")
+                        return True
+                    except Exception as inner_e:
+                        logger.warning(f"Errore nell'invio del segnale keep-alive: {inner_e}")
+                
+                # Se la sessione non è attiva, re-inizializza il client
+                logger.info("Sessione FusionSolar non attiva, re-inizializzazione in corso...")
+                return self.initialize_client()
+                
+            except AttributeError:
+                # Se il metodo is_session_active non esiste (versioni vecchie della libreria)
+                logger.warning("Metodo is_session_active non disponibile nella versione corrente della libreria")
+                # Prova comunque a tenere viva la sessione
+                try:
+                    self.client.keep_alive()
+                    logger.debug("Sessione FusionSolar mantenuta attiva (metodo alternativo)")
+                    return True
+                except AttributeError:
+                    logger.warning("Metodo keep_alive non disponibile nella versione corrente della libreria")
+                    # Se neanche keep_alive esiste, semplicemente restituisci True
+                    return True
+                    
+        except Exception as e:
+            logger.warning(f"Errore nel mantenere attiva la sessione FusionSolar: {e}")
+            return False

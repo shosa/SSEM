@@ -503,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="modal-body">
                         <form id="settingsForm">
                             <div class="mb-3">
-                                <label for="updateInterval" class="form-label">Intervallo di aggiornamento (secondi)</label>
+                                <label for="updateInterval" class="form-label">Intervallo di aggiornamento DASHBOARD (no valori impianti) (in secondi)</label>
                                 <input type="number" class="form-control" id="updateInterval" min="5" max="300" value="30">
                             </div>
                             <div class="mb-3 form-check">
