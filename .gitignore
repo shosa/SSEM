@@ -42,9 +42,6 @@ $RECYCLE.BIN/
 
 # File locali che potrebbero contenere dati sensibili
 
-# File temporanei
-temp/
-tmp/
 
 # Database SQLite
 *.sqlite
